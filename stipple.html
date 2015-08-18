@@ -1,0 +1,27 @@
+<html>
+	<head>
+		<title>stipple</title>
+		<script type="text/javascript" src="stipple.js"></script>
+	<body>
+		<h2>stipple</h2>
+    <img id="image-in" src="./image.jpg" style="display:none"/>
+    <canvas id="canvas-out" width="500" height="500"></canvas>
+
+		<script type="text/javascript">
+      function $(id) { return document.getElementById(id); }
+      var imgIn = $("image-in");
+      imgIn.onload = function() {
+      var canvasIn = document.createElement("canvas");
+      canvasIn.width = imgIn.width;
+      canvasIn.height = imgIn.height;
+      var ctxIn = canvasIn.getContext("2d"); 
+      ctxIn.drawImage(imgIn,0,0);
+      var imgDataIn = ctxIn.getImageData(0,0,canvasIn.width,canvasIn.height);
+      var canvasOut = $("canvas-out");
+      
+      new Stipple(imgDataIn, canvasOut).start();
+      }
+
+		</script>
+	</body>
+</html>
