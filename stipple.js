@@ -2,20 +2,22 @@ Stipple = function(imgData, canvas) {
 
     // TODO: pull out magic numbers
     
-    var MAG_CONST = 1; //0.00005;
+    var MAG_CONST = 1/4096; //0.00005; // fuckin' magnets
     var EMIT_RATE = 30;
     var SPAWN_CHANCE = 0.006;//0.006;
     var SPAWN_TICKS = 60;
     var P_SIZE = 8.0;     // 8 , 12
-    var CELL_SIZE = 8.0;  // 16
+    var CELL_SIZE = 16.0;  // 16
     var width = canvas.width;
     var height = canvas.height;
     var ctx = canvas.getContext("2d");
     var particles;
+    var tickNum=0;
 
     this.start = function() {
+      ctx.fillRect(0, 0, width, height);
       particles = new ParticleSystem();
-      for (var i = 0;i<4;i++) {
+      for (var i = 0;i<2;i++) {
         //particles.add(Math.random()*width,Math.random()*height);
         particles.spawn(new Emitter(width*0.5,height*0.5));
       }
@@ -24,7 +26,7 @@ Stipple = function(imgData, canvas) {
 
     this.draw = function(ctx) {
       ctx.fillStyle = "#000"; 
-      ctx.globalAlpha = 1;
+      //ctx.globalAlpha = 1;
       ctx.fillRect(0, 0, width, height);
 
       particles.draw(ctx);
@@ -36,6 +38,10 @@ Stipple = function(imgData, canvas) {
       particles.move();
       particles.emit();
       this.draw(ctx);
+ //     if (++tickNum%2 == 0)
+        //saveimg(canvas,tickNum/2);
+   //   if (tickNum > 3600) return;
+
       var that = this;
       setTimeout(function(){that.tick()},1);
     }
@@ -449,5 +455,31 @@ Stipple = function(imgData, canvas) {
 
     function chance(prob) {
       return prob > Math.random();
+    }
+
+    function saveimg(canvas, frame) {
+      var outputImg = document.createElement("img");
+      outputImg.src = canvas.toDataURL();
+      outputImg.title = frame+"";
+
+				var downloader = document.getElementById('downloader');
+				if (!downloader) {
+					downloader = document.createElement('div');
+					downloader.id = 'downloader';
+					downloader.style.display = 'none';
+				}
+				document.body.appendChild(downloader);
+
+				while (downloader.children.length > 0) {
+					downloader.removeChild(downloader.children[downloader.children.length - 1]);
+				}
+
+				var anchor = document.createElement('a');
+				anchor.href = outputImg.src;
+				anchor.target = "_blank";
+				anchor.download = "frame-"+frame+".png";
+				downloader.appendChild(anchor);
+				anchor.click();
+				document.body.removeChild(downloader);
     }
 }
