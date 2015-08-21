@@ -1,38 +1,43 @@
 Stipple = function(imgData, canvas) {
 
-    var CELL_SIZE = 10.0;
+    // TODO: pull out magic numbers
+    
+    var MAG_CONST = 1; //0.00005;
+    var EMIT_RATE = 30;
+    var SPAWN_CHANCE = 0.006;//0.006;
+    var SPAWN_TICKS = 60;
+    var P_SIZE = 8.0;     // 8 , 12
+    var CELL_SIZE = 8.0;  // 16
     var width = canvas.width;
     var height = canvas.height;
     var ctx = canvas.getContext("2d");
-
-    var particles ;//= new ParticleSystem();
+    var particles;
 
     this.start = function() {
       particles = new ParticleSystem();
+      for (var i = 0;i<4;i++) {
+        //particles.add(Math.random()*width,Math.random()*height);
+        particles.spawn(new Emitter(width*0.5,height*0.5));
+      }
       this.tick();
     }
 
-    this.draw = function() {
-      ctx.fillStyle = "#fff"; // TODO: gray, coloured particles
+    this.draw = function(ctx) {
+      ctx.fillStyle = "#000"; 
       ctx.globalAlpha = 1;
       ctx.fillRect(0, 0, width, height);
 
-      particles.draw();
+      particles.draw(ctx);
     }
 
     this.tick = function() {
 
-      particles.add(width/2 + (-2 + Math.random()*4),
-                    height/2 + (-2 + Math.random()*4));
-      particles.add(width/2 + (-2 + Math.random()*4),
-                    height/2 + (-2 + Math.random()*4));
-
-      particles.plan();
+      particles.calc();
       particles.move();
-
-      this.draw();
-      var foo = this;
-      setTimeout(function(){foo.tick()},1);
+      particles.emit();
+      this.draw(ctx);
+      var that = this;
+      setTimeout(function(){that.tick()},1);
     }
 
 
@@ -43,57 +48,105 @@ Stipple = function(imgData, canvas) {
     var Particle = (function() {
 
       function Particle(x, y) {
-        this.origin = new Vec2(x,y);
-        this.mass = 1.0;
+        this.pos = new Vec2(x,y);
         this.velocity = new Vec2(0,0);
+        this.mass = 1.0;
+        this.moved = false;
       }
 
       Particle.prototype = {
-        plan : function(force) {
-          this.velocity.mult(0.9); // damping
-          force.div(this.mass); // f = ma
-          this.velocity.add(force);
+        calc : function(force) {
+          this.velocity.mult(0.8); // damping
+          //force.div(this.mass); // f = ma
+          this.velocity.addv(force);
+          this.velocity.limit(1.0);
+          this.moved = false;
         },
         move : function() {
-          this.origin.add(this.velocity);
-          if (this.outOfBounds()) {
+          if (this.moved) return;
+
+          this.moved = true;
+          this.pos.addv(this.velocity);
+          if (!this.withinBounds()) {
             return;
           }
-          var x = Math.floor(map(this.origin.x, 0, width, 0, imgData.width));
-          var y = Math.floor(map(this.origin.y, 0, height, 0, imgData.height));
+          var x = Math.floor(map(this.pos.x, 0, width, 0, imgData.width));
+          var y = Math.floor(map(this.pos.y, 0, height, 0, imgData.height));
           // TODO: look into Uint32 stuff
           var pxl = ((y * imgData.width) + x) * 4;
           var r = imgData.data[pxl];
           var g = imgData.data[pxl+1];
           var b = imgData.data[pxl+2];
-          var targetMass = CELL_SIZE * norm(Math.max(r,g,b), 256, 0);
+          var brightness = r*0.3 + g*0.59 + b*0.11;
+          var targetMass = P_SIZE * norm(brightness, 0, 256, 0);
           if (targetMass > this.mass) {
             this.mass = Math.min(this.mass * 1.1, targetMass);
           } else {
             this.mass = Math.max(this.mass * 0.9, targetMass);
           }
         },
-        outOfBounds : function() {
-          if (this.origin.x < 0 || this.origin.x >= width) {
-            return true;
-          }
-          if (this.origin.y < 0 || this.origin.y >= height) {
-            return true;
-          }
-          return false;
+        withinBounds : function() {
+          return this.pos.x >= 0 && this.pos.x < width && 
+            this.pos.y >= 0 && this.pos.y < height;
         },
-        draw : function() {
-          ctx.fillStyle = "#404040"; // TODO: take color from image?
-          var n = norm(this.mass, 0, CELL_SIZE);
-          var r = CELL_SIZE;// * n * n;
+        draw : function(ctx) {
+          var n = norm(this.mass, 0, P_SIZE);
+          var r = P_SIZE * n * n * 0.3;
+
+          ctx.fillStyle = "#fff"; 
+          // TODO join tiny particles with dark lines, yo
+          ctx.save();
+          ctx.translate(this.pos.x, this.pos.y);
+          ctx.scale(r,r);
           ctx.beginPath();
-          ctx.ellipse(this.origin.x, this.origin.y, r, r, 0, 0, 2 * Math.PI);
+          ctx.arc(0, 0, 1, 0, 2*Math.PI, true);
           ctx.fill();
-        }
+          ctx.restore();
+        },
       };
 
       return Particle;
     })();
+
+    var Emitter = (function() {
+
+      function Emitter(x, y, a) {
+        if (!a) a = Math.random()*2*Math.PI;
+        this.pos = new Vec2(x,y);
+        this.angle = a;
+        var velX = 0.15*Math.sin(a);
+        var velY = 0.15*Math.cos(a);
+        this.velocity = new Vec2(velX,velY);
+        this.ticks = 0;
+      }
+
+      Emitter.prototype = {
+          move : function() {
+              this.pos.addv(this.velocity);
+          },
+          emit : function() {
+              if (this.ticks++ % EMIT_RATE == 0) {
+                  return new Particle(this.pos.x, this.pos.y);
+              }
+          },
+          draw : function (ctx) {
+            ctx.save();
+            ctx.strokeStyle = "#f00";
+            ctx.translate(this.pos.x, this.pos.y);
+            ctx.moveTo(-1,-1);
+            ctx.lineTo(1,1);
+            ctx.moveTo(1,-1);
+            ctx.lineTo(-1,1);
+            ctx.stroke(); 
+            ctx.restore();
+          },
+          spawn : function() {
+            return this.ticks > SPAWN_TICKS && chance(SPAWN_CHANCE);
+          }
+      };
+
+      return Emitter;
+    }());
     
 
 
@@ -105,37 +158,37 @@ Stipple = function(imgData, canvas) {
           this.sys = sys;
           this.neighbours = [];
           this.particles = [];
-          this.origin = new Vec2(CELL_SIZE * x, CELL_SIZE * y);
+          this.pos = new Vec2(CELL_SIZE * x, CELL_SIZE * y);
         }
 
         Cell.prototype = {
-          plan : function() {
-            for (var i=0; i<this.particles.length; i++) {
+          calc : function() {
+            for (var i=0, n=this.particles.length; i<n; i++) {
               var p = this.particles[i];
               var force = this.repel(p);
-              for (var j=0; j<this.neighbours.length; j++) {
+              for (var j=0, m=this.neighbours.length; j<m; j++) {
                 var cell = this.neighbours[j];
                 if (cell) {
-                  force.add(cell.repel(p));
+                  force.addv(cell.repel(p));
                 }
               }
-              force.limit(1.0);
-              p.plan(force);
+              force.limit(1);
+              p.calc(force);
             }
           },
           move : function() {
             for (var i=this.particles.length - 1; i>=0; i--) {
               var p = this.particles[i];
               p.move();
-              if (!this.contains(p.origin.x, p.origin.y)) {
+              if (!this.contains(p.pos.x, p.pos.y)) {
                 this.remove(p);
                 this.sys.place(p);
               }
             }
           },
-          draw : function() {
-            for (var i=0 ; i<this.particles.length; i++) {
-              this.particles[i].draw();
+          draw : function(ctx) {
+            for (var i=0, n=this.particles.length; i<n; i++) {
+              this.particles[i].draw(ctx);
             }
             //this.debugDraw();
           },
@@ -148,30 +201,30 @@ Stipple = function(imgData, canvas) {
           },
           repel : function(p) {
             var sum = new Vec2(0,0);
-            for (var i=0; i<this.particles.length; i++) {
+            for (var i=0, n=this.particles.length; i<n; i++) {
               var other = this.particles[i];
               if (other === p) {
                 continue; // don't repel self
               }
-              var dist = Vec2.dist(p.origin, other.origin);
+              var vec = Vec2.sub(p.pos, other.pos);
+              var dist = vec.mag();
               if (dist > CELL_SIZE) {
-                continue;
+                  continue;
               }
-              var unit = Vec2.sub(p.origin, other.origin);
-              unit.normalize();
-              dist = norm(dist, 0, CELL_SIZE);
-              unit.mult((p.mass * other.mass) / (dist * dist));
-              sum.add(unit);
+              vec.div(dist); // normalize
+              dist /= CELL_SIZE; // normalize
+              vec.mult(MAG_CONST * (p.mass * other.mass) / (dist * dist));
+              sum.addv(vec);
             }
             return sum;
           },
           contains : function(x, y) {
-            var dx = x - this.origin.x;
-            if (dx < 0 || dx > CELL_SIZE) {
+            var dx = x - this.pos.x;
+            if (dx < 0 || dx >= CELL_SIZE) {
               return false;
             }
-            var dy = y - this.origin.y;
-            if (dy < 0 || dy > CELL_SIZE) {
+            var dy = y - this.pos.y;
+            if (dy < 0 || dy >= CELL_SIZE) {
               return false;
             }
             return true;
@@ -189,6 +242,7 @@ Stipple = function(imgData, canvas) {
       function ParticleSystem() {
         this.cellWidth = Math.floor(width / CELL_SIZE);
         this.cellHeight = Math.floor(height / CELL_SIZE);
+        this.emitters = [];
         this.cells = [];
 
         for (var x=0; x < this.cellWidth; x++) {
@@ -205,10 +259,10 @@ Stipple = function(imgData, canvas) {
       }
 
       ParticleSystem.prototype = {
-        plan : function() {
+        calc : function() {
           for (var x=0; x < this.cellWidth; x++) {
             for (var y=0; y < this.cellHeight; y++) {
-              this.cells[x][y].plan();
+              this.cells[x][y].calc();
             }
           }
         },
@@ -218,43 +272,62 @@ Stipple = function(imgData, canvas) {
               this.cells[x][y].move();
             }
           }
+          for (var i=0, n=this.emitters.length; i<n; i++) {
+            this.emitters[i].move();
+          }
         },
-        draw : function() {
+        draw : function(ctx) {
           for (var x=0; x < this.cellWidth; x++) {
             for (var y=0; y < this.cellHeight; y++) {
-              this.cells[x][y].draw();
+              this.cells[x][y].draw(ctx);
             }
+          }
+          return;
+          for (var i=0, n=this.emitters.length; i<n; i++) {
+            this.emitters[i].draw(ctx);
+          }
+        },
+        emit : function() {
+          var spawners = [];
+          for (var i=0, n=this.emitters.length; i<n; i++) {
+            var e = this.emitters[i];
+            var p = e.emit();
+            if (p) this.place(p);
+            if (e.spawn()) spawners.push(e);
+          }
+          for (var i=0, n=spawners.length; i<n; i++) {
+            this.spawn(spawners[i]);
           }
         },
         add : function(x, y) {
           var p = new Particle(x, y);
           this.place(p);
         },
+        spawn : function(e) {
+          var idx = this.emitters.indexOf(e);
+          if (idx > -1) this.emitters.splice(idx,1);
+          this.emitters.push(new Emitter(e.pos.x,e.pos.y,e.angle+Math.random()*Math.PI/2));
+          this.emitters.push(new Emitter(e.pos.x,e.pos.y,e.angle-Math.random()*Math.PI/2));
+        },
         place : function(p) {
-          var cellx = Math.floor(p.origin.x / CELL_SIZE);
-          var celly = Math.floor(p.origin.y / CELL_SIZE);
-          if (cellx < 0 || cellx >= this.cellWidth) {
-            return;
-          }
-          if (celly < 0 || celly >= this.cellHeight) {
-            return;
-          }
-          var cell = this.cells[cellx][celly];
-          cell.add(p);
+          var x = Math.floor(p.pos.x / CELL_SIZE);
+          var y = Math.floor(p.pos.y / CELL_SIZE);
+          var cell = this.cellAt(x,y);
+          if (cell) cell.add(p);
         },
         neighbours : function(x, y) {
           return [
-            this.getCell(x-1, y-1),
-            this.getCell(x  , y-1),
-            this.getCell(x+1, y-1),
-            this.getCell(x-1, y  ),
-            this.getCell(x+1, y  ),
-            this.getCell(x-1, y+1),
-            this.getCell(x  , y+1),
-            this.getCell(x+1, y+1)
+            this.cellAt(x-1, y-1),
+            this.cellAt(x  , y-1),
+            this.cellAt(x+1, y-1),
+            this.cellAt(x-1, y  ),
+            this.cellAt(x+1, y  ),
+            this.cellAt(x-1, y+1),
+            this.cellAt(x  , y+1),
+            this.cellAt(x+1, y+1)
           ];
         },
-        getCell : function(x, y) {
+        cellAt : function(x, y) {
           if (x<0 || x>=this.cellWidth || y<0 || y>=this.cellHeight) {
             return null;
           }
@@ -265,8 +338,9 @@ Stipple = function(imgData, canvas) {
       return ParticleSystem;
     }());
 
+
     //-------------------------------------------
-    // Vector (ripped from processing-js)
+    // Vector
 
     var Vec2 = (function() {
       function Vec2(x, y) {
@@ -274,49 +348,41 @@ Stipple = function(imgData, canvas) {
         this.y = y || 0;
       }
 
-      Vec2.dist = function(v1, v2) {
-        return v1.dist(v2);
-      };
-
       Vec2.prototype = {
         get : function() {
           return new Vec2(this.x, this.y);
         },
-        add: function(v, y) {
-          if (arguments.length === 1) {
+        add: function(x, y) {
+            this.x += x;
+            this.y += y;
+        },
+        addv: function(v) {
             this.x += v.x;
             this.y += v.y;
-          } else {
-            this.x += v;
-            this.y += y;
-          }
         },
-        sub: function(v, y) {
-          if (arguments.length === 1) {
+        sub: function(x, y) {
+            this.x -= x;
+            this.y -= y;
+        },
+        subv: function(v) {
             this.x -= v.x;
             this.y -= v.y;
-          } else {
-            this.x -= v;
-            this.y -= y;
-          }
         },
-        mult: function(v) {
-          if (typeof v === 'number') {
-            this.x *= v;
-            this.y *= v;
-          } else {
+        mult: function(n) {
+            this.x *= n;
+            this.y *= n;
+        },
+        multv: function(v) {
             this.x *= v.x;
             this.y *= v.y;
-          }
         },
-        div: function(v) {
-          if (typeof v === 'number') {
-            this.x /= v;
-            this.y /= v;
-          } else {
+        div: function(n) {
+            this.x /= n;
+            this.y /= n;
+        },
+        divv: function(v) {
             this.x /= v.x;
             this.y /= v.y;
-          }
         },
         dist : function(v) {
           var dx = this.x - v.x,
@@ -335,29 +401,43 @@ Stipple = function(imgData, canvas) {
           }
         },
         limit: function(high) {
-          if (this.mag() > high) {
-            this.normalize();
-            this.mult(high);
+          var magsq = this.x*this.x + this.y*this.y;
+          if (magsq > high*high) { 
+              this.mult(high/Math.sqrt(magsq));
           }
         },
       };
 
-      for (var method in Vec2.prototype) {
-        if (Vec2.prototype.hasOwnProperty(method) && !Vec2.hasOwnProperty(method)) {
-          Vec2[method] = function(v1, v2) {
-            var v = v1.get();
-            v[method](v2);
-            return v;
-          };
-        }
+      Vec2.add = function(v1, v2) {
+        var v = v1.get();
+        v.addv(v2);
+        return v;
       }
+      Vec2.sub = function(v1, v2) {
+        var v = v1.get();
+        v.subv(v2);
+        return v;
+      }
+      Vec2.mult = function(v1, v2) {
+        var v = v1.get();
+        v.multv(v2);
+        return v;
+      }
+      Vec2.div = function(v1, v2) {
+        var v = v1.get();
+        v.divv(v2);
+        return v;
+      }
+      Vec2.dist = function(v1, v2) {
+        return v1.dist(v2);
+      };
 
       return Vec2;
     }());
 
 
     //-------------------------------------------
-    // Processing utils
+    // Utils
 
     function norm(val, low, high) {
       return (val - low) / (high - low);
@@ -365,5 +445,9 @@ Stipple = function(imgData, canvas) {
 
     function map(val, istart, iend, ostart, oend) {
       return ostart + (oend - ostart) * ((val - istart) / (iend - istart));
+    }
+
+    function chance(prob) {
+      return prob > Math.random();
     }
 }
