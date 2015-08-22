@@ -3,7 +3,7 @@
 js/canvas knock-off of Robert Hodgin's stippling project   
 >  http://roberthodgin.com/stippling/
   
-by way of Jordan Orelli's processing version:   
+by way of Jordan Orelli's processing version   
 >  https://github.com/jordanorelli/stippling
 
 also swiped some vector bits from Processing.js   
