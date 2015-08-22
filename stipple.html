@@ -1,7 +1,7 @@
 <html>
 	<head>
 		<title>stipple</title>
-		<script type="text/javascript" src="stipple.js"></script>
+		<script type="text/javascript" src="stippler.js"></script>
     </head>
 	<body>
         <canvas id="canvas-out" width="800" height="800"></canvas>
@@ -15,12 +15,15 @@
                 var canvasIn = document.createElement("canvas");
                 canvasIn.width = imgIn.width;
                 canvasIn.height = imgIn.height;
+
                 var ctxIn = canvasIn.getContext("2d"); 
                 ctxIn.drawImage(imgIn,0,0);
+
                 var imgDataIn = ctxIn.getImageData(0,0,canvasIn.width,canvasIn.height);
                 var canvasOut = $("canvas-out");
+                canvasOut.height = canvasOut.width * canvasIn.height/canvasIn.width;
 
-                new Stipple(imgDataIn, canvasOut).start();
+                new Stippler(imgDataIn, canvasOut).start();
             }
 
 		</script>
