@@ -1,4 +1,4 @@
-!(sample-output.png)
+![](sample-output.png)
 
 js/canvas knock-off of Robert Hodgin's stippling project 
   http://roberthodgin.com/stippling/
