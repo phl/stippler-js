@@ -11,8 +11,8 @@ also swiped some vector bits from Processing.js
 
 Image by James Willamor    
 >  https://www.flickr.com/photos/bz3rk/   
-under    
+>  under    
 >  https://creativecommons.org/licenses/by-sa/2.0/
 
 Ends up being too slow to run realtime in the browser with decent
-fidelity, but does okay at with fewer, larger particles.
+fidelity, but does okay with fewer, larger particles.
