@@ -80,7 +80,11 @@ Stippler = function(imgData, canvas) {
         this.size = 1.0;
       }
       Point.prototype = {
+        addForce : function(f) {
+          this.force.vadd(f);
+        },
         calc : function() {
+          this.force.limit(1);
           this.vel.mult(0.8); // damping
           this.vel.vadd(this.force);
           this.vel.limit(1.0);
@@ -180,11 +184,10 @@ Stippler = function(imgData, canvas) {
             var p = this.points[i];
 
             for (var j=0, m=this.neighbours.length; j<m; j++) {
-              p.force.vadd(this.neighbours[j].forces(p));
+              p.addForce(this.neighbours[j].forces(p));
             }
-            p.force.vadd(this.forces(p));
+            p.addForce(this.forces(p));
 
-            p.force.limit(1);
             p.calc();
           }
         },
