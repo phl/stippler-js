@@ -14,5 +14,8 @@ Image by James Willamor
 >  under    
 >  https://creativecommons.org/licenses/by-sa/2.0/
 
-Ends up being too slow to run realtime in the browser with decent
+Ends up scaling too poorly to run realtime in the browser with decent
 fidelity, but does okay with fewer, larger particles.
+
+Uncomment the saveimg stuff to have it dump frames out to disk (in Chrome
+anyway).
