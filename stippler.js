@@ -1,42 +1,55 @@
 Stippler = function(imgData, canvas) {
 
-    // TODO: pull out all the magic numbers
-    // TODO: manhattan distance gives artifacts
-    
-    var REPEL_CONST = 1/4096; // ??? fuckin' magnets
-
-    var EMITTER_SPEED = 0.15;
-    var EMIT_INTERVAL = 30;
-    var SPLIT_CHANCE = 0.006;//0.006;
-    var SPLIT_MINAGE = 60;
-
-    var P_SIZE = 8.0;     // 8 , 12
-    var CELL_SIZE = 16.0;  // 16
-
-    var BG_FILL = "#303";
-    var FG_FILL = "#fff";
-
-    var tickNum = 0;
     this.ctx = canvas.getContext("2d");
+
+    // These run the show
+    var P_SIZE = 8;          // max blob size, larger => more repulsion
+    var CELL_SIZE = 16;      // smaller runs quicker, constrains movement
+    var MAG_FORCE = 1/16;    // fuckin' magnets. Interacts with first two
+
+    // Colours
+    var BG_STYLE = "#303";   // these are screen-space, so can get fancy
+    var FG_STYLE = "#fff";   // with linear/radial gradients
+    var DARK_ON_LIGHT = false;
+
+    // Particle emitter stuff
+    var EMITTER_SPEED = 0.15; // speed of emitter travel
+    var EMIT_INTERVAL = 30;   // how many ticks between dropping a point
+    var SPLIT_MINAGE = 60;    // number of ticks before emitter can split
+    var SPLIT_CHANCE = 0.006; // chance of splitting on a given tick -
+                              //        growth is exponential so look out
+
+    // TODO: pull out more magic numbers
 
     this.start = function() {
       this.clear();
       this.model = new Model();
 
-      for (var i = 0;i<8;i++) {
-//        this.model.addPoint(Math.random()*canvas.width,Math.random()*canvas.height);
+      for (var i = 0;i<4;i++) {
+        // Create pairs of emitters to start
         this.model.split(new Emitter(canvas.width*0.5,canvas.height*0.5));
       } 
-
+      for (var i=0; i < 8000; i++) {
+        // Or dump a load of particles if you're impatient
+        // this.model.addPoint(Math.random()*canvas.width,Math.random()*canvas.height);
+      }
+      this.tickNum = 0;
+      this.keepRunning = true;
       this.run();
+    }
+
+    this.stop = function() {
+      this.keepRunning = false;
     }
 
     this.run = function() {
       this.tick();
       this.draw();
-      // if (tickNum % 2 == 0) saveimg(canvas,tickNum/2);
-      var that = this;
-      setTimeout(function(){that.run()},1000/60); // yeah right
+      // if (this.tickNum % 2 == 0) saveimg(canvas,this.tickNum/2);
+      if (this.keepRunning) {
+        var that = this;
+        setTimeout(function(){that.run()},1000/60); // yeah right
+      }
     }
 
     this.tick = function() {
@@ -51,7 +64,7 @@ Stippler = function(imgData, canvas) {
     }
 
     this.clear = function() {
-      this.ctx.fillStyle = BG_FILL; 
+      this.ctx.fillStyle = BG_STYLE; 
       this.ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
@@ -68,26 +81,25 @@ Stippler = function(imgData, canvas) {
       }
       Point.prototype = {
         calc : function() {
-          this.vel.mult(0.8); // damping, TODO f=ma?
+          this.vel.mult(0.8); // damping
           this.vel.vadd(this.force);
           this.vel.limit(1.0);
         },
         tick : function() {
           this.pos.vadd(this.vel);
-          if (!inBounds(this.pos.x, this.pos.y)) {
-            return;
-          }
+          if (!inBounds(this.pos.x, this.pos.y)) return; 
           var pxl = this.pixel();
           var bright = (pxl[0]*0.3 + pxl[1]*0.59 + pxl[2]*0.11) / 255;
+          if (DARK_ON_LIGHT) bright = 1-bright;
           var targetSize = P_SIZE * bright;
-          this.size += (targetSize - this.size)/8; // TODO or constant growth?
+          this.size += (targetSize - this.size)/8;
           this.force.clear();
         },
         draw : function(ctx) {
           var radius = this.size * this.size * 0.3 / P_SIZE;
           //if (radius < 0.1) return;
 
-          ctx.fillStyle = FG_FILL; 
+          ctx.fillStyle = FG_STYLE; 
           ctx.beginPath();
           ctx.arc(this.pos.x, this.pos.y, radius, 0, 2*Math.PI, true);
           ctx.fill();
@@ -201,14 +213,10 @@ Stippler = function(imgData, canvas) {
             var p1 = this.points[i];
             if (p1 !== p) {
               var v = Vec2.sub(p.pos, p1.pos);
-              var dist = v.man(); // hey, manhattan
+              var dist = v.mag();
               if (dist <= CELL_SIZE) {
-                //v.div(dist); // normalize
-                //dist /= CELL_SIZE;
-                //v.mult(REPEL_CONST * p.size * p1.size / (dist * dist));
-
-                v.mult(REPEL_CONST * p.size * p1.size * CELL_SIZE * CELL_SIZE / (dist*dist*dist));
-
+                // inverse cube, wrong but looks better ¯\_(ツ)_/¯
+                v.mult(MAG_FORCE * p.size * p1.size / (dist*dist*dist));
                 forces.vadd(v);
               }
             }
@@ -275,9 +283,9 @@ Stippler = function(imgData, canvas) {
           this.cells[Math.floor(x/CELL_SIZE)][Math.floor(y/CELL_SIZE)].addPoint(p);
         },
         split : function(e) {
-          var idx = this.emitters.indexOf(e); // TODO slow
+          var idx = this.emitters.indexOf(e);
           if (idx > -1) this.emitters.splice(idx,1);
-          // TODO bounds check
+          if (!inBounds(e.pos.x, e.pos.y)) return;
           var splittees = e.split();
           this.emitters.push(splittees[0]);
           this.emitters.push(splittees[1]);
@@ -385,11 +393,6 @@ Stippler = function(imgData, canvas) {
           var y = this.y;
           return Math.sqrt(x * x + y * y);
         },
-        man : function(v) {
-          var x = this.x < 0 ? -this.x : this.x;
-          var y = this.y < 0 ? -this.y : this.y;
-          return 0.79351 * (x + y);
-        },
         normalize : function() {
           var m = this.mag();
           if (m > 0) {
@@ -397,9 +400,9 @@ Stippler = function(imgData, canvas) {
           }
         },
         limit : function(high) {
-          var magsq = this.x*this.x + this.y*this.y;
-          if (magsq > high*high) { 
-              this.mult(high/Math.sqrt(magsq));
+          var mag = this.mag();
+          if (mag > high) { 
+              this.mult(high/mag);
           }
         },
         clear : function() {
@@ -443,7 +446,7 @@ Stippler = function(imgData, canvas) {
     }
 
     function inBounds(x,y) {
-      return x>=1 && x<canvas.width && y>=0 && y<canvas.height;
+      return x>=0 && x<canvas.width && y>=0 && y<canvas.height;
     }
 
     function saveimg(canvas, framenum) {

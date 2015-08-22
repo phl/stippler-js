@@ -5,25 +5,40 @@
     </head>
 	<body>
         <canvas id="canvas-out" width="800" height="800"></canvas>
-        <img id="image-in" src="./image7.jpg" style="display:none"/>
+        <img id="image-in" src="./image1.jpg" style="display:none"/>
 
         <script type="text/javascript">
             function $(id) { return document.getElementById(id); }
 
             var imgIn = $("image-in");
             imgIn.onload = function() {
+                var canvasOut = $("canvas-out");
+
+                // Set output canvas proprtions
+                if (imgIn.height < imgIn.width) {
+                  canvasOut.height = canvasOut.width * imgIn.height/imgIn.width;
+                } else {
+                  canvasOut.width = canvasOut.height * imgIn.width/imgIn.height;
+                }
+
+                // Scale image onto input canvas
                 var canvasIn = document.createElement("canvas");
-                canvasIn.width = imgIn.width;
-                canvasIn.height = imgIn.height;
+                canvasIn.width = canvasOut.width;
+                canvasIn.height = canvasOut.height;
 
                 var ctxIn = canvasIn.getContext("2d"); 
-                ctxIn.drawImage(imgIn,0,0);
+                ctxIn.drawImage(imgIn,
+                                0,0,imgIn.width,imgIn.height,
+                                0,0,canvasIn.width, canvasIn.height);
 
                 var imgDataIn = ctxIn.getImageData(0,0,canvasIn.width,canvasIn.height);
-                var canvasOut = $("canvas-out");
-                canvasOut.height = canvasOut.width * canvasIn.height/canvasIn.width;
 
-                new Stippler(imgDataIn, canvasOut).start();
+                var stippler = new Stippler(imgDataIn, canvasOut);
+                canvasOut.onclick = function() {
+                  stippler.stop();
+                }
+
+                stippler.start();
             }
 
 		</script>
